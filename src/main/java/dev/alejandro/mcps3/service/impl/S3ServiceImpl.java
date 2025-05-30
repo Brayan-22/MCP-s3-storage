@@ -15,6 +15,7 @@ import software.amazon.awssdk.services.s3.model.S3Object;
 
 import java.io.ByteArrayInputStream;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -35,21 +36,19 @@ public class S3ServiceImpl implements IS3Service {
 
     @Tool(name = "Get S3 Resource", description = "Gets a resource from S3")
     @Override
-    public String getResource(String localSavePath,String key) throws IOException {
+    public String getResource(String localSavePath, String key) throws IOException {
         S3Resource s3Resource = s3Template.download(bucketName, key);
         if (s3Resource.exists()) {
-            try (InputStream inputStream = s3Resource.getInputStream()) {
-                byte[] data = inputStream.readAllBytes();
-                try (InputStreamReader reader = new InputStreamReader(new ByteArrayInputStream(data))) {
-                    StringBuilder content = new StringBuilder();
-                    int ch;
-                    while ((ch = reader.read()) != -1) {
-                        content.append((char) ch);
-                    }
-                    return content.toString();
+            try (InputStream inputStream = s3Resource.getInputStream();
+                FileOutputStream outputStream = new FileOutputStream(localSavePath)) {
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
                 }
+                return localSavePath;
             } catch (IOException e) {
-                throw new IOException("Error reading S3 resource: " + key, e);
+                throw new IOException("Error saving S3 resource to local path: " + localSavePath, e);
             }
         }
         return null;
