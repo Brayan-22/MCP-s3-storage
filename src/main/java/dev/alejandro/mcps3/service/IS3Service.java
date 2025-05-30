@@ -9,9 +9,9 @@ import java.util.Optional;
 
 public interface IS3Service {
     @Tool(name = "Get S3 Resource", description = "Gets a resource from S3")
-    byte[] getResource(String key) throws IOException;
+    String getResource(String path, String key) throws IOException;
     @Tool(name = "Upload S3 Resource", description = "Uploads a resource to S3")
-    Optional<S3Resource> uploadResource(String key, byte[] data);
+    boolean uploadResource(String key, String path);
     @Tool(name = "List S3 Buckets", description = "Lists all S3 buckets in the bucket")
     List<String> listFile();
 }

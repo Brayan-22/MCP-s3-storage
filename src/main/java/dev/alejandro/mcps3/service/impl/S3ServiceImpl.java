@@ -6,14 +6,18 @@ import io.awspring.cloud.s3.S3Template;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.stringtemplate.v4.compiler.CodeGenerator.region_return;
+
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.ListObjectsResponse;
 import software.amazon.awssdk.services.s3.model.S3Object;
 
 import java.io.ByteArrayInputStream;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.util.List;
 import java.util.Optional;
 
@@ -31,33 +35,48 @@ public class S3ServiceImpl implements IS3Service {
 
     @Tool(name = "Get S3 Resource", description = "Gets a resource from S3")
     @Override
-    public byte[] getResource(String key) throws IOException {
+    public String getResource(String localSavePath,String key) throws IOException {
         S3Resource s3Resource = s3Template.download(bucketName, key);
         if (s3Resource.exists()) {
-            return s3Resource.getInputStream().readAllBytes();
+            try (InputStream inputStream = s3Resource.getInputStream()) {
+                byte[] data = inputStream.readAllBytes();
+                try (InputStreamReader reader = new InputStreamReader(new ByteArrayInputStream(data))) {
+                    StringBuilder content = new StringBuilder();
+                    int ch;
+                    while ((ch = reader.read()) != -1) {
+                        content.append((char) ch);
+                    }
+                    return content.toString();
+                }
+            } catch (IOException e) {
+                throw new IOException("Error reading S3 resource: " + key, e);
+            }
         }
         return null;
     }
 
     @Tool(name = "Upload S3 Resource", description = "Uploads a resource to S3")
     @Override
-    public Optional<S3Resource> uploadResource(String key, byte[] data) {
+    public boolean uploadResource(String key, String path) {
         if (key == null || key.isBlank()) {
             throw new IllegalArgumentException("Key cannot be empty");
         }
-        if (data == null || data.length == 0) {
-            throw new IllegalArgumentException("Data cannot be null or empty");
+        if (path == null || path.isBlank()) {
+            throw new IllegalArgumentException("Path cannot be empty");
         }
-        if (s3Template.download(bucketName, key).exists()) {
+        if (s3Template.objectExists(bucketName, key)) {
             throw new IllegalArgumentException("File already exists with key: " + key);
         }
-        InputStream inputStream = new ByteArrayInputStream(data);
 
-        S3Resource s3Resource = s3Template.upload(bucketName, key, inputStream);
-        if (s3Resource.exists()) {
-            return Optional.of(s3Resource);
+        try (InputStream inputStream = new FileInputStream(path)) {
+            S3Resource s3Resource = s3Template.upload(bucketName, key, inputStream);
+            if (s3Resource.exists()) {
+                return true;
+            }
+        } catch (IOException e) {
+            return false;
         }
-        return Optional.empty();
+        return false;
     }
 
     @Tool(name = "List S3 Buckets", description = "Lists all S3 buckets in the bucket")
